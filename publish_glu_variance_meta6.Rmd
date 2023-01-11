@@ -1,0 +1,1073 @@
+---
+title: "Glutamate Variability Meta-analysis"
+output: html_notebook
+---
+
+# Packages
+```{r}
+
+
+install.packages("lmerTest")
+install.packages("gridExtra")
+install.packages("ggpubr")
+install.packages("metafor")
+install.packages("flextable")
+install.packages("weights")
+install.packages("tidyverse")
+install.packages("readr")
+
+
+
+library("metafor")
+library("lmerTest")
+library("tidyverse")
+library("gridExtra")
+library("ggpubr")
+library("flextable")
+library("weights")
+library("readr")
+
+
+```
+
+# Clean Data
+```{r}
+# make sure you download the folder containing r scripts for 'data_clean' etc and put path below
+sapply(list.files(pattern="[.]R$", path="C:/Users/rejuksm/Dropbox/R/variance/from_rob2/r_functions/r_functions/R_packages/", full.names=TRUE), source);
+
+# load data
+dat <- read_csv("C:/Users/rejuksm/Dropbox/R/variance/Github_Glu_Meta_analysis.csv")
+
+
+# Calculate Hedges' G
+dat <- escalc(measure="SMD", m1i=m1i, sd1i=sd1i, n1i=n1i, m2i=m2i, sd2i=sd2i, n2i=n2i_con, data = dat)
+# this adds yi and vi to dataframe =  function "escalc" from the package metafor calculates effect size (yi), variance (vi)
+
+# Correct the class of variables
+dat$age_con <- as.numeric(dat$age_con)
+dat$age_combined <- as.numeric(dat$age_combined)
+dat$age_pt <- as.numeric(dat$age_pt)
+dat$age_pt_sd <- as.numeric(dat$age_pt_sd)
+
+
+dat$male_con <- as.numeric(dat$male_con)
+dat$male_pt <- as.numeric(dat$male_pt)
+dat$male_combined <- as.numeric(dat$male_combined)
+
+
+```
+
+
+```{r}
+
+unique(dat$studyid) # how many original studies
+
+```
+
+```{r} 
+# correlation between mean and sd - justifies using CVR instead of VR
+
+dat$weightmean <- stdz(dat$m1i, weight=dat$n1i)
+dat$weightsd  <- stdz(dat$sd1i, weight=dat$n1i)
+
+ggplot(dat) +
+  geom_point(aes(x = m1i, y=sd1i, colour = study, alpha = 0.05))
+
+ggplot(dat) +
+  geom_point(aes(x = weightmean, y=weightsd, colour = study, alpha = 0.05))
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/correlations/sd_mean_corr2.png')
+
+ggplot(data=dat , mapping = aes(x = m1i, y=sd1i, colour = study, alpha = 0.05, size = n1i)) +
+  geom_point() +
+  geom_smooth(aes(), method = lm,  size=0.5) +
+  labs(
+    x = "Mean Glutamatergic Metabolite Level",
+    y = "SD of Glutamatergic Metabolite"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+
+cor.test(dat$weightmean, dat$weightsd, 
+                    method = "pearson") # (weighted r=0.69, p<0.001).
+
+
+```
+
+
+
+
+
+
+
+
+# Run all meta analyses
+```{r}
+#SMD  - to view, type meta_results
+rm(meta_results) # this just removes previous meta-results you may have made
+meta_results=c()
+for (selected_region in unique(dat$region)){
+  for (selected_metabolite in unique(dat$metabolite)){
+      filtered_dat <- dat %>% filter(region==selected_region) %>% filter(metabolite==selected_metabolite)
+      # Only run for studies k>2
+      if(nrow(filtered_dat)>2){
+        result <- rma(yi, vi, data=filtered_dat, method="REML", slab=paste(author, year, sep=", "), control=list(maxiter=1000, stepadj=0.5)) #, mods=naive1
+        meta_results[[paste(selected_region, selected_metabolite, sep='_')]] <- result}}}
+
+# VR
+vr_meta <- function(selected_region, selected_metabolite, dat){
+  dat_group_region <- dat %>% filter(region == selected_region, metabolite==selected_metabolite)
+  if(nrow(dat_group_region)>2){
+    vr_region_group <- Calc.lVR(dat_group_region$sd2i,  dat_group_region$n2i_con, dat_group_region$sd1i, dat_group_region$n1i)
+    var_vr_region_group = Calc.var.lVR(dat_group_region$n2i_con, dat_group_region$n1i)
+    region_group_vr_meta = rma.uni(yi=vr_region_group,vi=var_vr_region_group,method='REML', slab = paste(dat_group_region$author, dat_group_region$year, sep = " "), control=list(maxiter=1000, stepadj=0.5))
+    return(region_group_vr_meta)}}
+
+rm(vr_results)
+vr_results=c()
+for (selected_region in unique(dat$region)){
+  for (selected_metabolite in unique(dat$metabolite)){
+        vr_result <- vr_meta(selected_region, selected_metabolite, dat)
+        vr_results[[paste(selected_region, selected_metabolite, sep='_')]] <- vr_result}}
+
+# CVR
+cvr_meta <- function(selected_region, selected_metabolite, dat){
+  dat_group_region <- dat %>% filter(region == selected_region, metabolite==selected_metabolite)
+  if(nrow(dat_group_region)>2){
+    cvr_region_group <- Calc.lnCVR(dat_group_region$m2i, dat_group_region$sd2i,  dat_group_region$n2i_con, dat_group_region$m1i, dat_group_region$sd1i, dat_group_region$n1i)
+  var_cvr_region_group = Calc.var.lnCVR(dat_group_region$m2i, dat_group_region$sd2i, dat_group_region$n2i_con, dat_group_region$m1i, dat_group_region$sd1i, dat_group_region$n1i)
+  region_group_cvr_meta = rma.uni(yi=cvr_region_group,vi=var_cvr_region_group, verbose=TRUE,digits=5,control=list(maxiter=200), method='REML', slab = paste(dat_group_region$author, dat_group_region$year, sep = " "))
+    return(region_group_cvr_meta)}}
+
+rm(cvr_results)
+cvr_results=c()
+for (selected_region in unique(dat$region)){
+  for (selected_metabolite in unique(dat$metabolite)){
+        cvr_result <- cvr_meta(selected_region, selected_metabolite, dat)
+        cvr_results[[paste(selected_region, selected_metabolite, sep='_')]] <- cvr_result}}
+
+
+# to view, type vr_results
+# vr_results
+# cvr_results
+# meta_results
+
+
+```
+
+# Functon to make the forest plots
+```{r}
+create_summary_plot<- function(meta_results, title){
+  
+  # Get region and metabolite labels
+  to_include <- names(meta_results)
+  label2 <- as.factor(str_sub(to_include,1,-5))
+  label1 <- as.factor(str_sub(to_include,-3,-1))
+  
+  # Create Data Frame
+  len = numeric(length(to_include))
+  graph_results <- data.frame(estimate=len, lb=len, ub=len, k=len, p=len)
+  graph_results$label1 <- label1
+  graph_results$label2 <- label2
+  #this bit is so that the numbers table and the forest plot have things in the same order
+  graph_results$label1 <- factor(graph_results$label1, levels = unique(graph_results$label1)) 
+  graph_results$label2 <- factor(graph_results$label2, levels = unique(graph_results$label2))
+  
+  # fill data frame with meta results
+  j=1
+  for (indiv_meta in to_include){
+    graph_results$estimate[j]=meta_results[[indiv_meta]]$b
+    graph_results$lb[j]=meta_results[[indiv_meta]]$ci.lb
+    graph_results$ub[j]=meta_results[[indiv_meta]]$ci.ub
+    graph_results$p[j]=meta_results[[indiv_meta]]$pval
+    j=j+1
+  }
+  
+  # Make forest plot
+  p <- ggplot(data=graph_results) +
+          geom_pointrange( aes(x=label1, y=estimate,  ymin=lb, ymax=ub), position = position_dodge(width = 0.9)) + 
+          facet_grid(cols = vars(label2), scales = "free", space='free', switch = "x") +
+          geom_hline(yintercept=0, lty=2) +  # add a dotted line at x=1 after flip
+          ylab("") +
+          xlab("")+
+          scale_y_continuous(position="right")+
+          theme_minimal() + # use a white background
+          theme(legend.position="none")+
+          theme(panel.background = element_rect(fill = NA, color = "grey"))+
+          theme(strip.text.x=element_text(angle =180, hjust = 0.5))+
+          theme(axis.text.x=element_text(angle = 90, hjust = 0.5))+
+          theme(axis.text.y = element_text(angle = 90, hjust=0.5))+
+          theme(strip.placement = 'outside')+
+          scale_color_grey()
+          
+  # get data for table
+  estimate = sprintf("%0.2f",round(graph_results$estimate, digits=3))
+  pval = sprintf("%0.2f",round(graph_results$p, digits=4))
+  k = graph_results$k
+  
+  # get confidence intervals
+  cis = c()
+  lbs <-  sprintf("%0.2f",round(graph_results$lb, digits=3))
+  ubs <-  sprintf("%0.2f",round(graph_results$ub, digits=3))
+  for(i in 1:length(lbs)){
+    ci <- paste0("[",lbs[i],", ", ubs[i],"]")
+    cis <- append(cis,ci)}
+  
+  seq(1)
+  lab <- data.frame(V0 = rep(seq(1,by=0.6,length.out=length(graph_results$label1)),times=3),
+                    #use V0 to adjust spacing between rows and V05 to adjust spacing between colums
+                    V05 = rep(c(1.5,2,3),each=length(graph_results$label1)),
+                    V1 = c(estimate,cis, pval))
+  lab$V1 <- as.character(lab$V1)
+  
+  data_table <- ggplot(lab) +
+      geom_text(aes(x = V0, y = V05, label = format(V1, nsmall = 1)),size = 3, hjust=0, vjust=0.0, angle=90) + theme_bw() +
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.position = "none",
+            panel.border = element_blank(), 
+            axis.text.x = element_text(colour="white"),#element_blank(), #can add a color here if you wannt to see cordinates to aid with positioning
+            axis.text.y = element_text(colour="white"), 
+            axis.ticks = element_line(colour="white"),#element_blank(),
+            plot.margin = unit(c(0,0,0,0), "lines")) +
+            labs(x="",y="") +
+            coord_cartesian(xlim=c(0,13))+
+            coord_cartesian(ylim=c(1,3.5))+
+            xlim(0,12)
+  
+  return(list(data_table, annotate_figure(p, left=text_grob(title,  size = 8, rot=90), fig.lab.pos = 'top.right')))
+}
+```
+
+# Draw the forest plots
+```{r fig.height=8, fig.width=8}
+# make sure folders exist
+png('C:/Users/rejuksm/Dropbox/R/variance/results/smd/summary.png', width = 185, height = 120, units='mm', res = 400)
+summary_smd <- create_summary_plot(meta_results, "SMD (95% CI)")
+p <- grid.arrange(summary_smd[[1]], summary_smd[[2]], nrow=2)
+dev.off()
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/cvr/summary.png', width = 185, height = 120, units='mm', res = 400)
+summary_cvr <- create_summary_plot(cvr_results, "CVR (95% CI)")
+grid.arrange(summary_cvr[[1]], summary_cvr[[2]], nrow=2)
+dev.off()
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/vr/summary.png', width = 185, height = 120, units='mm', res = 400)
+summary_vr <- create_summary_plot(vr_results, "VR (95% CI)")
+grid.arrange(summary_vr[[1]], summary_vr[[2]], nrow=2)
+dev.off()
+
+```
+
+
+
+
+
+
+
+
+
+
+# Year of publication, cpz, sex and age meta regression
+```{r}
+male_results = c()
+age_results = c()
+age_results_pt_sd = c()
+
+
+panss_results_cvr = c()
+panss_results_cvr_sd = c()
+cpz_results_cvr = c()
+male_results_cvr = c()
+age_results_cvr = c()
+age_results_cvr_pt_sd = c()
+
+
+fwhm_ratio_results_cvr = c()
+snr_ratio_results_cvr = c()
+
+year_results_vr = c()
+year_results_cvr = c()
+
+
+
+for (reg in unique(dat$region)){
+  for (metab in c('glu', 'gln', 'glx')){
+    sub_dat <- dat %>% filter(region==reg & metabolite==metab)
+    if(nrow(sub_dat)>2){
+      age_met<- rma(yi, vi, data=sub_dat, method="REML", mods=age_combined,control=list(maxiter=1000, stepadj=0.5))
+      age_met_pt_sd<- rma(yi, vi, data=sub_dat, method="REML", mods=age_pt_sd,control=list(maxiter=1000, stepadj=0.5))
+
+      if (sum((sub_dat$male_combined>0), na.rm=TRUE)>2){male_met<- rma(yi, vi, data=sub_dat, method="REML", mods=male_combined,control=list(maxiter=1000, stepadj=0.5))}
+      study_label = paste0(reg,'_', metab)
+      male_results <- append(male_results,study_label)
+      male_results <- append(male_results,c(male_met$b[[2]], male_met$se[2],male_met$pval[[2]]))
+      age_results <- append(age_results,study_label)
+      age_results <- append(age_results,c(age_met$b[[2]], age_met$se[2],age_met$pval[[2]]))
+      age_results_pt_sd <- append(age_results_pt_sd,study_label)
+      age_results_pt_sd <- append(age_results_pt_sd,c(age_met_pt_sd$b[[2]], age_met_pt_sd$se[2],age_met_pt_sd$pval[[2]]))
+    
+      cvr_region_group <- Calc.lnCVR(sub_dat$m2i, sub_dat$sd2i,  sub_dat$n2i_con, sub_dat$m1i, sub_dat$sd1i, sub_dat$n1i)
+      var_cvr_region_group = Calc.var.lnCVR(sub_dat$m2i, sub_dat$sd2i, sub_dat$n2i_con, sub_dat$m1i, sub_dat$sd1i, sub_dat$n1i)
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=year,control=list(maxiter=1000, stepadj=0.5))
+      year_results_cvr <- append(year_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))
+      
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=age_combined,control=list(maxiter=1000, stepadj=0.5))
+      age_results_cvr <- append(age_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))
+      
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=age_pt_sd,control=list(maxiter=1000, stepadj=0.5))
+      age_results_cvr_pt_sd <- append(age_results_cvr_pt_sd, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))
+      
+      
+# panss
+      
+      if (sum((sub_dat$panss_tot>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=panss_tot,control=list(maxiter=1000, stepadj=0.5))
+      panss_results_cvr <- append(panss_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+      
+ 
+# panss sd           
+            if (sum((sub_dat$panss_tot_sd>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=panss_tot_sd,control=list(maxiter=1000, stepadj=0.5))
+      panss_results_cvr_sd <- append(panss_results_cvr_sd, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+  
+# cpz
+      if (sum((sub_dat$cpz>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=cpz,control=list(maxiter=1000, stepadj=0.5))
+      cpz_results_cvr <- append(cpz_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+      
+# male 
+      if (sum((sub_dat$male_combined>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=male_combined,control=list(maxiter=1000, stepadj=0.5))
+      male_results_cvr <- append(male_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+      
+#fwhm_ratio
+        if (sum((sub_dat$fwhm_ratio>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=fwhm_ratio,control=list(maxiter=1000, stepadj=0.5))
+      fwhm_ratio_results_cvr <- append(fwhm_ratio_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+      
+# snr
+        if (sum((sub_dat$snr_ratio>0), na.rm=TRUE)>3){
+      region_group_cvr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab = paste(sub_dat$author, sub_dat$year, sep = " "), mods=snr_ratio,control=list(maxiter=1000, stepadj=0.5))
+      snr_ratio_results_cvr <- append(snr_ratio_results_cvr, c(study_label, region_group_cvr_meta$b[[2]], region_group_cvr_meta$se[2], region_group_cvr_meta$pval[[2]]))}
+      
+
+vr_region_group <- Calc.lVR( sub_dat$sd2i,  sub_dat$n2i_con, sub_dat$sd1i, sub_dat$n1i)
+      var_cvr_region_group = Calc.var.lVR( sub_dat$n2i_con,  sub_dat$n1i)
+      region_group_vr_meta = rma.uni(data=sub_dat,yi=cvr_region_group,vi=var_cvr_region_group,method='REML', slab  = paste(sub_dat$author, sub_dat$year, sep = " "), mods=year,control=list(maxiter=1000, stepadj=0.5))
+      year_results_vr <- append(year_results_vr,study_label)
+     year_results_vr <- append(year_results_vr,region_group_vr_meta$pval[[2]])
+    }
+ }
+ }
+
+# View results by uncommenting below
+# p value is last column
+# estimate, 2 standard error, 3 p val
+
+
+# male_results_cvr 
+# age_results_cvr 
+# age_results_pt_sd  
+
+# panss_results_cvr
+# panss_results_cvr_sd
+
+
+# fwhm_ratio_results_cvr 
+# snr_ratio_results_cvr 
+
+
+# age cvr result 
+# age_results_cvr_pt_sd
+
+
+# cpz_results_cvr 
+
+
+# metaregression of smd results:
+# write.table(age_results)
+# write.table(male_results)
+
+# age_results
+# male_results
+
+
+```
+
+```{r}
+# meta-regression for panss smd 
+
+panss_results = c()
+
+for (reg in unique(dat$region)){
+  for (metab in c('glu', 'gln', 'glx')){
+    sub_dat <- dat %>% filter(region==reg & metabolite==metab)
+    if(nrow(sub_dat)>2){
+      
+      if (sum((sub_dat$panss_tot>0), na.rm=TRUE)>3){
+        panss_met<- rma(yi, vi, data=sub_dat, method="REML", mods=panss_tot,control=list(maxiter=1000, stepadj=0.5))
+      study_label = paste0(reg,'_', metab)
+      panss_results <- append(panss_results,study_label)
+      panss_results <- append(panss_results,c(panss_met$b[[2]], panss_met$se[2],panss_met$pval[[2]]))}
+    }
+  }
+}
+      
+# results
+panss_results
+
+```
+
+```{r}
+# meta-regression for cpz smd 
+
+cpz_results = c()
+
+for (reg in unique(dat$region)){
+  for (metab in c('glu', 'gln', 'glx')){
+    sub_dat <- dat %>% filter(region==reg & metabolite==metab)
+#    sub_dat <- sub_dat %>% filter(cpz>0)
+    if(nrow(sub_dat)>2){
+      
+      if (sum((sub_dat$cpz>0), na.rm=TRUE)>2){
+        cpz_met<- rma(yi, vi, data=sub_dat, method="REML", mods=cpz,control=list(maxiter=1000, stepadj=0.5))
+      study_label = paste0(reg,'_', metab)
+      cpz_results <- append(cpz_results,study_label)
+      cpz_results <- append(cpz_results,c(cpz_met$b[[2]], cpz_met$se[2],cpz_met$pval[[2]]))}
+    }
+  }
+}
+      
+      # metaregression of smd results:?
+# write.table(cpz_results)
+cpz_results
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# MODERATE BY MEDICATION
+```{r}
+# MODERATE BY MED 
+# bg glx
+dat_bg_glx_cvr <- filter(dat, region == "bg", metabolite == "glx" )
+
+# calc cvr
+    dat_bg_glx_cvr2 <- Calc.lnCVR(dat_bg_glx_cvr$m2i, dat_bg_glx_cvr$sd2i,  dat_bg_glx_cvr$n2i_con, dat_bg_glx_cvr$m1i, dat_bg_glx_cvr$sd1i, dat_bg_glx_cvr$n1i)
+# does this add yi to dataframe or 'cvr', if cvr, then should this fo on rma below?    
+dat_bg_glx_cvr$cvr <- dat_bg_glx_cvr2
+
+# calc cvr var    
+  dat_bg_glx_VARcvr <- Calc.var.lnCVR(dat_bg_glx_cvr$m2i, dat_bg_glx_cvr$sd2i, dat_bg_glx_cvr$n2i_con, dat_bg_glx_cvr$m1i, dat_bg_glx_cvr$sd1i, dat_bg_glx_cvr$n1i)
+  
+dat_bg_glx_cvr$cvr_VAR <- dat_bg_glx_VARcvr
+
+dat_bg_glx_cvr$totn <- dat_bg_glx_cvr$n1i + dat_bg_glx_cvr$n2i_con
+
+# does hedges g (SMD) differ between med and non-med
+result4 <- rma(yi, vi, data=dat_bg_glx_cvr, method="REML", control=list(maxiter=1000, stepadj=0.5), mods=naive1)
+result4 # NS
+
+# does cvr differ between med and non-med
+result5 <- rma(cvr, cvr_VAR, data=dat_bg_glx_cvr, method="REML", control=list(maxiter=1000, stepadj=0.5), mods=naive1)
+result5 # NS
+
+
+```
+
+```{r}
+# MODERATE BY MED 
+# THALAMUS glu 
+dat_thal_glu_cvr <- filter(dat, region == "thal", metabolite == "glu" )
+
+# calc cvr
+    dat_thal_glu_cvr2 <- Calc.lnCVR(dat_thal_glu_cvr$m2i, dat_thal_glu_cvr$sd2i,  dat_thal_glu_cvr$n2i_con, dat_thal_glu_cvr$m1i, dat_thal_glu_cvr$sd1i, dat_thal_glu_cvr$n1i)
+    
+dat_thal_glu_cvr$cvr <- dat_thal_glu_cvr2
+
+# calc cvr var    
+  dat_thal_glu_VARcvr <- Calc.var.lnCVR(dat_thal_glu_cvr$m2i, dat_thal_glu_cvr$sd2i, dat_thal_glu_cvr$n2i_con, dat_thal_glu_cvr$m1i, dat_thal_glu_cvr$sd1i, dat_thal_glu_cvr$n1i)
+  
+dat_thal_glu_cvr$cvr_VAR <- dat_thal_glu_VARcvr
+
+dat_thal_glu_cvr$totn <- dat_thal_glu_cvr$n1i + dat_thal_glu_cvr$n2i_con
+
+# does cvr differ between med and non-med
+result6 <- rma(cvr, cvr_VAR, data=dat_thal_glu_cvr, method="REML", control=list(maxiter=1000, stepadj=0.5), mods=naive1)
+result6 # NS
+
+        
+```
+
+```{r}
+# MODERATE BY MED 
+# MFC glu 
+
+dat_pfc_glu_cvr <- filter(dat, region == "pfc", metabolite == "glu" )
+
+# calc cvr
+    dat_pfc_glu_cvr2 <- Calc.lnCVR(dat_pfc_glu_cvr$m2i, dat_pfc_glu_cvr$sd2i,  dat_pfc_glu_cvr$n2i_con, dat_pfc_glu_cvr$m1i, dat_pfc_glu_cvr$sd1i, dat_pfc_glu_cvr$n1i)
+    
+dat_pfc_glu_cvr$cvr <- dat_pfc_glu_cvr2
+
+# calc cvr var    
+  dat_pfc_glu_VARcvr <- Calc.var.lnCVR(dat_pfc_glu_cvr$m2i, dat_pfc_glu_cvr$sd2i, dat_pfc_glu_cvr$n2i_con, dat_pfc_glu_cvr$m1i, dat_pfc_glu_cvr$sd1i, dat_pfc_glu_cvr$n1i)
+  
+dat_pfc_glu_cvr$cvr_VAR <- dat_pfc_glu_VARcvr
+
+dat_pfc_glu_cvr$totn <- dat_pfc_glu_cvr$n1i + dat_pfc_glu_cvr$n2i_con
+
+# does hedges g (SMD) differ between med and non-med
+result5 <- rma(yi, vi, data=dat_pfc_glu_cvr, method="REML", control=list(maxiter=1000, stepadj=0.5), mods=naive1)
+result5 # NS
+
+#  Does CVR differ between med and unmed
+result6 <- rma(cvr, cvr_VAR, data=dat_pfc_glu_cvr, method="REML", control=list(maxiter=1000, stepadj=0.5), mods=naive1)
+result6 # NS
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# GRAPH OF META-REGRESSIONS
+# CVR
+# MTL GLU
+```{r}
+# step 1
+
+# filter it : hip glu age
+dat$totn <- dat$n1i + dat$n2i_con
+dat_hip_glu_cvr <- filter(dat, region == "hip", metabolite == "glu" )
+
+
+# calc cvr
+dat_hip_glu_cvr2 <- Calc.lnCVR(dat_hip_glu_cvr$m2i, dat_hip_glu_cvr$sd2i,  dat_hip_glu_cvr$n2i_con, dat_hip_glu_cvr$m1i, dat_hip_glu_cvr$sd1i, dat_hip_glu_cvr$n1i)
+    
+dat_hip_glu_cvr$cvr <- dat_hip_glu_cvr2
+
+
+# calc cvr var    
+  dat_hip_glu_VARcvr <- Calc.var.lnCVR(dat_hip_glu_cvr$m2i, dat_hip_glu_cvr$sd2i, dat_hip_glu_cvr$n2i_con, dat_hip_glu_cvr$m1i, dat_hip_glu_cvr$sd1i, dat_hip_glu_cvr$n1i)
+  
+dat_hip_glu_cvr$cvr_VAR <- dat_hip_glu_VARcvr
+
+dat_hip_glu_cvr$totn <- dat_hip_glu_cvr$n1i + dat_hip_glu_cvr$n2i_con
+
+
+```
+
+```{r}
+# step 2 graph 
+# hip glU age
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/hip_glu_age_combined2.png')
+
+class(dat_hip_glu_cvr$age_combined) # age_combined is character format, so geom_smooth wont work
+dat_hip_glu_cvr$age_combined <- as.numeric(dat_hip_glu_cvr$age_combined)
+
+ggplot(data=dat_hip_glu_cvr, mapping = aes(x = age_combined, y=cvr, size=totn)) +
+  geom_point(colour="blue", alpha=0.3) +
+  geom_smooth(aes(), colour='blue', method = lm,  size=0.5) +
+  labs(
+    x = "Age",
+    y = "CVR: Temporal Lobe Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+dev.off()
+
+```
+
+
+
+
+# GRAPH: BG Glu
+```{r}
+# step 1
+# filter it for the analysis you want:
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+
+dat_bg_glu_cvr <- filter(dat, region == "bg", metabolite == "glu" )
+
+# calc cvr
+    dat_bg_glu_cvr2 <- Calc.lnCVR(dat_bg_glu_cvr$m2i, dat_bg_glu_cvr$sd2i,  dat_bg_glu_cvr$n2i_con, dat_bg_glu_cvr$m1i, dat_bg_glu_cvr$sd1i, dat_bg_glu_cvr$n1i)
+    
+dat_bg_glu_cvr$cvr <- dat_bg_glu_cvr2
+
+# calc cvr var    
+  dat_bg_glu_VARcvr <- Calc.var.lnCVR(dat_bg_glu_cvr$m2i, dat_bg_glu_cvr$sd2i, dat_bg_glu_cvr$n2i_con, dat_bg_glu_cvr$m1i, dat_bg_glu_cvr$sd1i, dat_bg_glu_cvr$n1i)
+  
+dat_bg_glu_cvr$cvr_VAR <- dat_bg_glu_VARcvr
+
+dat_bg_glu_cvr$totn <- dat_bg_glu_cvr$n1i + dat_bg_glu_cvr$n2i_con
+
+
+```
+
+```{r}
+# STEP 2
+# bg glu age
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/bg_glu_age_combined.png')
+
+class(dat_bg_glu_cvr$age_combined) # age_combined is character format, so geom_smooth wont work
+dat_bg_glu_cvr$age_combined <- as.numeric(dat_bg_glu_cvr$age_combined)
+
+ggplot(data=dat_bg_glu_cvr, mapping = aes(x = age_combined, y=cvr, size=totn)) +
+  geom_point(colour="blue", alpha=0.3) +
+  geom_smooth(aes(), colour='blue', method = lm,  size=0.5) +
+  labs(
+    x = "Age",
+    y = "CVR: Basal Ganglia Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+dev.off()
+
+```
+
+```{r}
+# bg glu pub panss_tot
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/bg_glu_panss_tot.png')
+
+class(dat_bg_glu_cvr$panss_tot) # panss_tot is character format, so geom_smooth wont work
+dat_bg_glu_cvr$panss_tot <- as.numeric(dat_bg_glu_cvr$panss_tot)
+
+ggplot(data=dat_bg_glu_cvr, mapping = aes(x = panss_tot, y=cvr, size=totn)) +
+  geom_point(colour="blue", alpha=0.3) +
+  geom_smooth(aes(), colour='blue', method = lm,  size=0.5) +
+  labs(
+    x = "PANSS Total Score",
+    y = "CVR: Basal Ganglia Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+dev.off()
+
+```
+
+
+
+
+# GRAPH: PFC
+```{r}
+# step 1
+# pfc gln panss_tot
+# filter it for the analysis you want:
+dat_pfc_gln_cvr <- filter(dat, region == "pfc", metabolite == "gln" )
+
+# calc cvr
+    dat_pfc_gln_cvr2 <- Calc.lnCVR(dat_pfc_gln_cvr$m2i, dat_pfc_gln_cvr$sd2i,  dat_pfc_gln_cvr$n2i_con, dat_pfc_gln_cvr$m1i, dat_pfc_gln_cvr$sd1i, dat_pfc_gln_cvr$n1i)
+    
+dat_pfc_gln_cvr$cvr <- dat_pfc_gln_cvr2
+
+# calc cvr var    
+  dat_pfc_gln_VARcvr <- Calc.var.lnCVR(dat_pfc_gln_cvr$m2i, dat_pfc_gln_cvr$sd2i, dat_pfc_gln_cvr$n2i_con, dat_pfc_gln_cvr$m1i, dat_pfc_gln_cvr$sd1i, dat_pfc_gln_cvr$n1i)
+  
+dat_pfc_gln_cvr$cvr_VAR <- dat_pfc_gln_VARcvr
+
+dat_pfc_gln_cvr$totn <- dat_pfc_gln_cvr$n1i + dat_pfc_gln_cvr$n2i_con
+
+
+```
+
+```{r}
+# step 2
+# pfc gln panss_tot
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/pfc_gln_panss_tot2.png')
+
+class(dat_pfc_gln_cvr$panss_tot) # panss_tot is character format, so geom_smooth wont work
+dat_pfc_gln_cvr$panss_tot <- as.numeric(dat_pfc_gln_cvr$panss_tot)
+
+ggplot(data=dat_pfc_gln_cvr, mapping = aes(x = panss_tot, y=cvr, size=totn)) +
+  geom_point(colour="blue", alpha=0.3) +
+  geom_smooth(aes(), colour='blue', method = lm,  size=0.5) +
+  labs(
+    x = "PANSS Total Score",
+    y = "CVR: MFC Glutamine"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+dev.off()
+
+```
+
+
+
+
+
+```{r}
+# pfc glu age
+
+# step 1
+# filter it for the analysis you want + # make cvr sheet
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+
+dat_pfc_glu_cvr <- filter(dat, region == "pfc", metabolite == "glu" )
+
+# calc cvr
+    dat_pfc_glu_cvr2 <- Calc.lnCVR(dat_pfc_glu_cvr$m2i, dat_pfc_glu_cvr$sd2i,  dat_pfc_glu_cvr$n2i_con, dat_pfc_glu_cvr$m1i, dat_pfc_glu_cvr$sd1i, dat_pfc_glu_cvr$n1i)
+    
+dat_pfc_glu_cvr$cvr <- dat_pfc_glu_cvr2
+
+# calc cvr var    
+  dat_pfc_glu_VARcvr <- Calc.var.lnCVR(dat_pfc_glu_cvr$m2i, dat_pfc_glu_cvr$sd2i, dat_pfc_glu_cvr$n2i_con, dat_pfc_glu_cvr$m1i, dat_pfc_glu_cvr$sd1i, dat_pfc_glu_cvr$n1i)
+  
+dat_pfc_glu_cvr$cvr_VAR <- dat_pfc_glu_VARcvr
+
+dat_pfc_glu_cvr$totn <- dat_pfc_glu_cvr$n1i + dat_pfc_glu_cvr$n2i_con
+```
+
+```{r}
+# step 2:
+# pfc glu age 
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/pfc_glu_age.png')
+
+class(dat_pfc_glu_cvr $age_combined) # age_combined is character format, so geom_smooth wont work
+dat_pfc_glu_cvr $age_combined <- as.numeric(dat_pfc_glu_cvr $age_combined)
+
+ggplot(data=dat_pfc_glu_cvr, mapping = aes(x = age_combined, y=cvr, size=totn)) +
+  geom_point(colour="blue", alpha=0.3) +
+  geom_smooth(aes(), colour='blue', method = lm,  size=0.5) +
+  labs(
+    x = "Age",
+    y = "CVR: MFC Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+dev.off()
+
+```
+
+
+
+
+
+
+# GRAPH: META-REGRESSION 
+# for effect sizes (SMD)
+# AGE
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# Effect size (yi)
+# White matter glx & Age 
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_wm_pfc_glx <- filter(dat, region == "wm_pfc", metabolite == "glx" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glx_age_combined.png')
+
+class(dat_wm_pfc_glx $age_combined) # age_combined is character format, so geom_smooth wont work
+dat_wm_pfc_glx $age_combined <- as.numeric(dat_wm_pfc_glx $age_combined)
+
+ggplot(data=dat_wm_pfc_glx , mapping = aes(x = age_combined, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Age",
+    y = "Effect size: Frontal White Matter Glx"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+# White matter glu & Age
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_wm_pfc_glu <- filter(dat, region == "wm_pfc", metabolite == "glu" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glu_age_combined.png')
+
+class(dat_wm_pfc_glu $age_combined) # age_combined is character format, so geom_smooth wont work
+dat_wm_pfc_glu $age_combined <- as.numeric(dat_wm_pfc_glu $age_combined)
+
+ggplot(data=dat_wm_pfc_glu , mapping = aes(x = age_combined, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Age",
+    y = "Effect size: Frontal White Matter Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+# BG gln + Age
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_bg_gln <- filter(dat, region == "bg", metabolite == "gln" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/bg_gln_age_combined.png')
+
+class(dat_bg_gln $age_combined) # age_combined is character format, so geom_smooth wont work
+dat_bg_gln $age_combined <- as.numeric(dat_bg_gln $age_combined)
+
+ggplot(data=dat_bg_gln , mapping = aes(x = age_combined, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Age",
+    y = "Effect size: Basal Ganglia Glutamine"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+
+
+
+
+
+
+
+# META-REGRESSION GRAPHS: SMD + MALE %
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+# white matter glx + male
+
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_wm_pfc_glx <- filter(dat, region == "wm_pfc", metabolite == "glx" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glx_male_combined.png')
+
+class(dat_wm_pfc_glx $male_combined) # male_combined is character format, so geom_smooth wont work
+dat_wm_pfc_glx $male_combined <- as.numeric(dat_wm_pfc_glx $male_combined)
+
+ggplot(data=dat_wm_pfc_glx , mapping = aes(x = male_combined, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Proportion of Males %",
+    y = "Effect size: Frontal White Matter Glx"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+# mfc glu + Male %
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_pfc_glu <- filter(dat, region == "pfc", metabolite == "glu" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/pfc_glu_male_combined.png')
+
+class(dat_pfc_glu $male_combined) # age_combined is character format, so geom_smooth wont work
+dat_pfc_glu $male_combined <- as.numeric(dat_pfc_glu $male_combined)
+
+ggplot(data=dat_pfc_glu , mapping = aes(x = male_combined, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Proportion of Males %",
+    y = "Effect size: MFC Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+  
+dev.off()
+
+```
+
+
+
+
+
+
+
+
+# META-REGRESSION GRAPH: SMD + PANSS
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+#  panss_tot bg glu
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_bg_glu <- filter(dat, region == "bg", metabolite == "glu" )
+
+class(dat_bg_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
+dat_bg_glu $panss_tot <- as.numeric(dat_bg_glu $panss_tot)
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/bg_glu_panss_tot.png')
+
+
+
+ggplot(data=dat_bg_glu , mapping = aes(x = panss_tot, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "PANSS Total Score",
+    y = "Effect size: Basal Ganglia Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+#  panss_tot dlpfc glu
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_dlpfc_glu <- filter(dat, region == "dlpfc", metabolite == "glu" )
+
+class(dat_dlpfc_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
+dat_dlpfc_glu $panss_tot <- as.numeric(dat_dlpfc_glu $panss_tot)
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/dlpfc_glu_panss_tot.png')
+
+
+
+ggplot(data=dat_dlpfc_glu , mapping = aes(x = panss_tot, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "PANSS Total Score",
+    y = "Effect size: DLPFC Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+#  panss_tot hip glu
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_hip_glu <- filter(dat, region == "hip", metabolite == "glu" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/hip_glu_panss_tot.png')
+
+class(dat_hip_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
+dat_hip_glu $panss_tot <- as.numeric(dat_hip_glu $panss_tot)
+
+ggplot(data=dat_hip_glu , mapping = aes(x = panss_tot, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "PANSS Total Score",
+    y = "Effect size: Temporal Lobe Glutamate"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+
+
+
+
+
+
+
+# META-REGRESSION GRAPH: SMD + CPZ
+```{r}
+# REGRESSION FOR EFFECT SIZES
+# effect size (yi)
+#  cpz hip glu
+dat$totn <- dat$n1i + dat$n2i_con
+
+dat_hip_glx <- filter(dat, region == "hip", metabolite == "glx" )
+
+png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/hip_glx_cpz.png')
+
+class(dat_hip_glx $cpz) # cpz is character format, so geom_smooth wont work
+dat_hip_glx $cpz <- as.numeric(dat_hip_glx $cpz)
+
+ggplot(data=dat_hip_glx , mapping = aes(x = cpz, y=yi, size=totn)) +
+  geom_point(colour="darkgreen", alpha=0.3) +
+  geom_smooth(aes(), colour='darkgreen', method = lm,  size=0.5) +
+  geom_hline(yintercept = 0, linetype=3) +
+  labs(
+    x = "Chlorpromazine Dose Equivalent",
+    y = "Effect size: Temporal Lobe Glx"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+dev.off()
+```
+
+
+
