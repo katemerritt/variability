@@ -33,10 +33,10 @@ library("readr")
 # Clean Data
 ```{r}
 # make sure you download the folder containing r scripts for 'data_clean' etc and put path below
-sapply(list.files(pattern="[.]R$", path="C:/Users/rejuksm/Dropbox/R/variance/from_rob2/r_functions/r_functions/R_packages/", full.names=TRUE), source);
+sapply(list.files(pattern="[.]R$", path="C:/Users/Me/Analysis/R/variance/from_rob2/r_functions/r_functions/R_packages/", full.names=TRUE), source);
 
 # load data
-dat <- read_csv("C:/Users/rejuksm/Dropbox/R/variance/Github_Glu_Meta_analysis.csv")
+dat <- read_csv("C:/Users/Me/Analysis/R/variance/Github_Glu_Meta_analysis.csv")
 
 
 # Calculate Hedges' G
@@ -76,7 +76,7 @@ ggplot(dat) +
 ggplot(dat) +
   geom_point(aes(x = weightmean, y=weightsd, colour = study, alpha = 0.05))
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/correlations/sd_mean_corr2.png')
+png('C:/Users/Me/Analysis/R/variance/results/correlations/sd_mean_corr2.png')
 
 ggplot(data=dat , mapping = aes(x = m1i, y=sd1i, colour = study, alpha = 0.05, size = n1i)) +
   geom_point() +
@@ -244,17 +244,17 @@ create_summary_plot<- function(meta_results, title){
 # Draw the forest plots
 ```{r fig.height=8, fig.width=8}
 # make sure folders exist
-png('C:/Users/rejuksm/Dropbox/R/variance/results/smd/summary.png', width = 185, height = 120, units='mm', res = 400)
+png('C:/Users/Me/Analysis/R/variance/results/smd/summary.png', width = 185, height = 120, units='mm', res = 400)
 summary_smd <- create_summary_plot(meta_results, "SMD (95% CI)")
 p <- grid.arrange(summary_smd[[1]], summary_smd[[2]], nrow=2)
 dev.off()
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/cvr/summary.png', width = 185, height = 120, units='mm', res = 400)
+png('C:/Users/Me/Analysis/R/variance/results/cvr/summary.png', width = 185, height = 120, units='mm', res = 400)
 summary_cvr <- create_summary_plot(cvr_results, "CVR (95% CI)")
 grid.arrange(summary_cvr[[1]], summary_cvr[[2]], nrow=2)
 dev.off()
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/vr/summary.png', width = 185, height = 120, units='mm', res = 400)
+png('C:/Users/Me/Analysis/R/variance/results/vr/summary.png', width = 185, height = 120, units='mm', res = 400)
 summary_vr <- create_summary_plot(vr_results, "VR (95% CI)")
 grid.arrange(summary_vr[[1]], summary_vr[[2]], nrow=2)
 dev.off()
@@ -588,7 +588,7 @@ dat_hip_glu_cvr$totn <- dat_hip_glu_cvr$n1i + dat_hip_glu_cvr$n2i_con
 # step 2 graph 
 # hip glU age
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/hip_glu_age_combined2.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/hip_glu_age_combined2.png')
 
 class(dat_hip_glu_cvr$age_combined) # age_combined is character format, so geom_smooth wont work
 dat_hip_glu_cvr$age_combined <- as.numeric(dat_hip_glu_cvr$age_combined)
@@ -640,7 +640,7 @@ dat_bg_glu_cvr$totn <- dat_bg_glu_cvr$n1i + dat_bg_glu_cvr$n2i_con
 # STEP 2
 # bg glu age
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/bg_glu_age_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/bg_glu_age_combined.png')
 
 class(dat_bg_glu_cvr$age_combined) # age_combined is character format, so geom_smooth wont work
 dat_bg_glu_cvr$age_combined <- as.numeric(dat_bg_glu_cvr$age_combined)
@@ -663,7 +663,7 @@ dev.off()
 ```{r}
 # bg glu pub panss_tot
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/bg_glu_panss_tot.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/bg_glu_panss_tot.png')
 
 class(dat_bg_glu_cvr$panss_tot) # panss_tot is character format, so geom_smooth wont work
 dat_bg_glu_cvr$panss_tot <- as.numeric(dat_bg_glu_cvr$panss_tot)
@@ -712,7 +712,7 @@ dat_pfc_gln_cvr$totn <- dat_pfc_gln_cvr$n1i + dat_pfc_gln_cvr$n2i_con
 # step 2
 # pfc gln panss_tot
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/pfc_gln_panss_tot2.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/pfc_gln_panss_tot2.png')
 
 class(dat_pfc_gln_cvr$panss_tot) # panss_tot is character format, so geom_smooth wont work
 dat_pfc_gln_cvr$panss_tot <- as.numeric(dat_pfc_gln_cvr$panss_tot)
@@ -764,7 +764,7 @@ dat_pfc_glu_cvr$totn <- dat_pfc_glu_cvr$n1i + dat_pfc_glu_cvr$n2i_con
 # step 2:
 # pfc glu age 
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/pfc_glu_age.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/pfc_glu_age.png')
 
 class(dat_pfc_glu_cvr $age_combined) # age_combined is character format, so geom_smooth wont work
 dat_pfc_glu_cvr $age_combined <- as.numeric(dat_pfc_glu_cvr $age_combined)
@@ -801,7 +801,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_wm_pfc_glx <- filter(dat, region == "wm_pfc", metabolite == "glx" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glx_age_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/wm_pfc_glx_age_combined.png')
 
 class(dat_wm_pfc_glx $age_combined) # age_combined is character format, so geom_smooth wont work
 dat_wm_pfc_glx $age_combined <- as.numeric(dat_wm_pfc_glx $age_combined)
@@ -829,7 +829,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_wm_pfc_glu <- filter(dat, region == "wm_pfc", metabolite == "glu" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glu_age_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/wm_pfc_glu_age_combined.png')
 
 class(dat_wm_pfc_glu $age_combined) # age_combined is character format, so geom_smooth wont work
 dat_wm_pfc_glu $age_combined <- as.numeric(dat_wm_pfc_glu $age_combined)
@@ -857,7 +857,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_bg_gln <- filter(dat, region == "bg", metabolite == "gln" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/bg_gln_age_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/bg_gln_age_combined.png')
 
 class(dat_bg_gln $age_combined) # age_combined is character format, so geom_smooth wont work
 dat_bg_gln $age_combined <- as.numeric(dat_bg_gln $age_combined)
@@ -893,7 +893,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_wm_pfc_glx <- filter(dat, region == "wm_pfc", metabolite == "glx" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/wm_pfc_glx_male_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/wm_pfc_glx_male_combined.png')
 
 class(dat_wm_pfc_glx $male_combined) # male_combined is character format, so geom_smooth wont work
 dat_wm_pfc_glx $male_combined <- as.numeric(dat_wm_pfc_glx $male_combined)
@@ -920,7 +920,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_pfc_glu <- filter(dat, region == "pfc", metabolite == "glu" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/pfc_glu_male_combined.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/pfc_glu_male_combined.png')
 
 class(dat_pfc_glu $male_combined) # age_combined is character format, so geom_smooth wont work
 dat_pfc_glu $male_combined <- as.numeric(dat_pfc_glu $male_combined)
@@ -960,7 +960,7 @@ dat_bg_glu <- filter(dat, region == "bg", metabolite == "glu" )
 class(dat_bg_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
 dat_bg_glu $panss_tot <- as.numeric(dat_bg_glu $panss_tot)
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/bg_glu_panss_tot.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/bg_glu_panss_tot.png')
 
 
 
@@ -989,7 +989,7 @@ dat_dlpfc_glu <- filter(dat, region == "dlpfc", metabolite == "glu" )
 class(dat_dlpfc_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
 dat_dlpfc_glu $panss_tot <- as.numeric(dat_dlpfc_glu $panss_tot)
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/dlpfc_glu_panss_tot.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/dlpfc_glu_panss_tot.png')
 
 
 
@@ -1015,7 +1015,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_hip_glu <- filter(dat, region == "hip", metabolite == "glu" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/hip_glu_panss_tot.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/hip_glu_panss_tot.png')
 
 class(dat_hip_glu $panss_tot) # panss_tot is character format, so geom_smooth wont work
 dat_hip_glu $panss_tot <- as.numeric(dat_hip_glu $panss_tot)
@@ -1050,7 +1050,7 @@ dat$totn <- dat$n1i + dat$n2i_con
 
 dat_hip_glx <- filter(dat, region == "hip", metabolite == "glx" )
 
-png('C:/Users/rejuksm/Dropbox/R/variance/results/meta_regression/smd/hip_glx_cpz.png')
+png('C:/Users/Me/Analysis/R/variance/results/meta_regression/smd/hip_glx_cpz.png')
 
 class(dat_hip_glx $cpz) # cpz is character format, so geom_smooth wont work
 dat_hip_glx $cpz <- as.numeric(dat_hip_glx $cpz)
