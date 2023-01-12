@@ -1,8 +1,8 @@
 # variability
-Glutamate Variability Meta-analysis
+Glutamate Variability Meta-analysis:
 
-R code in 'publish_glu_variance_meta6'
+- R code in 'publish_glu_variance_meta6'
 
-Requires R functions 
+- Requires R functions 
 
-Data in 'Github_Glu_Meta_analysis.csv'
+- Data in 'Github_Glu_Meta_analysis.csv'
