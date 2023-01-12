@@ -6,3 +6,5 @@ Glutamate Variability Meta-analysis:
 - Requires R functions 
 
 - Data in 'Github_Glu_Meta_analysis.csv'
+
+Please cite associated paper:
